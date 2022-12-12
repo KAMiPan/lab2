@@ -18,7 +18,7 @@ class Manager(Base):  # 物业经理
     name = Column(String(20))
 
     def __repr__(self):
-        return 'Manager[id='+str(self.id)+',name='+self.name+']'
+        return 'Manager[id=' + str(self.id) + ',name=' + self.name + ']'
 
 
 class Owner(Base):  # 业主
@@ -29,7 +29,19 @@ class Owner(Base):  # 业主
     address = Column(String(20))
 
     def __repr__(self):
-        return 'Owner[id=' + str(self.id) + ',name=' + self.name + ',address='+self.address+']'
+        return 'Owner[id=' + str(self.id) + ',name=' + self.name + ',address=' + self.address + ']'
+
+    def submit_repair(self, type_id, content, channel):  # 业主提交报修
+        repair = Repair(type_id=type_id, content=content, channel=channel, owner_id=self.id)
+        session.add(repair)
+        session.flush()
+        session.commit()
+        return repair.id  # 返回新增repair的主键
+
+
+def get_initiated_repairs():  # 查看所有状态为1-已发起待录入的repair
+    repairs = session.query(Repair).filter_by(status=1).all()
+    return repairs
 
 
 class Dispatcher(Base):  # 调度员
@@ -39,7 +51,44 @@ class Dispatcher(Base):  # 调度员
     name = Column(String(20))
 
     def __repr__(self):
-        return 'Dispatcher[id='+str(self.id)+',name='+self.name+']'
+        return 'Dispatcher[id=' + str(self.id) + ',name=' + self.name + ']'
+
+    def input_repair(self, repair_id):  # 调度员录入报修
+        repairs = session.query(Repair).filter_by(id=repair_id).all()
+        if len(repairs) != 1:  # 如果对应报修不存在时
+            return False
+        repair = repairs[0]
+        if repair.status != 1:  # 只能录入状态为1-已发起的报修
+            return False
+        repair.status = 2  # 报修状态修改为2-已录入
+        repair.dispatcher_id = self.id
+        session.commit()
+        return True  # 返回是否成功录入
+
+    def dispatch_repair(self, repair_id):  # 调度员调度报修
+        repairs = session.query(Repair).filter_by(id=repair_id).all()
+        if len(repairs) != 1:  # 如果对应报修不存在时
+            return False
+        repair = repairs[0]
+        if repair.status != 2:  # 只能调度状态为2-已录入的报修
+            return False
+        if repair.dispatcher_id != self.id:  # 只能调度自己录入的报修
+            return False
+        idle_workers = session.query(Worker).filter_by(is_idle=True)  # www找到所有空闲工人
+        for worker in idle_workers:  # 遍历找到能处理该故障类型的工人
+            if worker.can_repair(repair.type_id):
+                dispatch = RepairDispatch(repair_id=repair_id, worker_id=worker.id)  # 创建维修调度
+                session.add(dispatch)
+                session.flush()
+                worker.is_idle = False  # 工人是否空闲改为否
+                repair.status = 3  # 报修状态修改为3-已调度
+                session.commit()
+                return dispatch.id
+        return False  # 没有合适的空闲工人的情况
+
+    def get_self_inputted_repairs(self):  # 调度员查看所有自己录入的、状态为2-已录入待调度的repair
+        repairs = session.query(Repair).filter_by(status=2, dispatcher_id=self.id)
+        return repairs
 
 
 class Worker(Base):  # 维修工人
@@ -52,7 +101,11 @@ class Worker(Base):  # 维修工人
 
     def __repr__(self):
         return 'Worker[id=' + str(self.id) + ',name=' + self.name + \
-               ',is_idle='+str(self.is_idle)+',repair_types'+self.repair_types+']'
+               ',is_idle=' + str(self.is_idle) + ',repair_types' + self.repair_types + ']'
+
+    def can_repair(self, type_id):
+        types = self.repair_types.split(',')
+        return type_id in types
 
 
 class RepairType(Base):  # 故障类型
@@ -62,10 +115,10 @@ class RepairType(Base):  # 故障类型
     name = Column(String(20))
 
     def __repr__(self):
-        return 'RepairType[id='+str(self.id)+',name='+self.name+']'
+        return 'RepairType[id=' + str(self.id) + ',name=' + self.name + ']'
 
 
-class Repair(Base):  # 维修任务，对应多个维修调度
+class Repair(Base):  # 报修，对应多个维修调度
     __tablename__ = 'repair'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -78,9 +131,24 @@ class Repair(Base):  # 维修任务，对应多个维修调度
     time = Column(DateTime, default=datetime.now)
 
     def __repr__(self):
-        return 'Repair[id='+str(self.id)+',dispatcher_id='+str(self.dispatcher_id)+',type_id='+str(self.type_id) + \
-               ',status='+str(self.status)+',content='+self.content+',channel='+str(self.channel)+',ower_id=' + \
-               str(self.owner_id)+',time='+self.time.strftime('%Y-%m-%d %H:%M:%S')+']'
+        return 'Repair[id=' + str(self.id) + ',dispatcher_id=' + str(self.dispatcher_id) + ',type_id=' + str(
+            self.type_id) + ',status=' + str(self.status) + ',content=' + self.content + ',channel=' + str(
+            self.channel) + ',owner_id=' + str(self.owner_id) + ',time=' + self.time.strftime('%Y-%m-%d %H:%M:%S') + ']'
+
+    def get_active_dispatch(self):
+        active_dispatches = session.query(RepairDispatch).filter_by(repair_id=self.id, status=1).all()
+        if len(active_dispatches) != 1:  # 不存在活动中的调度
+            return False
+        return active_dispatches[0].id
+
+    def get_related_staff(self):  # 获取报修相关人员
+        related_staff = []
+        if self.dispatcher_id is not None:  # 添加负责该报修的调度员
+            related_staff.append('d' + str(self.dispatcher_id))
+        dispatches = session.query(RepairDispatch).filter_by(repair_id=self.id).all()
+        for dispatch in dispatches:  # 添加报修所有维修调度的工人
+            related_staff.append('w' + str(dispatch.worker_id))
+        return related_staff
 
 
 class RepairDispatch(Base):  # 维修调度，对应多个维修记录
@@ -89,7 +157,7 @@ class RepairDispatch(Base):  # 维修调度，对应多个维修记录
     id = Column(Integer, primary_key=True, autoincrement=True)
     repair_id = Column(Integer, ForeignKey("repair.id"))
     worker_id = Column(Integer, ForeignKey("worker.id"))
-    status = Column(Integer)  # 1-活动中，2-已关闭
+    status = Column(Integer, default=1)  # 1-活动中，2-已关闭
 
     def __repr__(self):
         return 'RepairDispatch[id=' + str(self.id) + ',repair_id=' + str(self.repair_id) + \
@@ -109,10 +177,10 @@ class RepairRecord(Base):  # 维修记录
     def __repr__(self):
         return 'RepairRecord[id=' + str(self.id) + ',dispatch_id=' + str(self.dispatch_id) + \
                ',type=' + str(self.type) + ',start_time=' + self.start_time.strftime('%Y-%m-%d %H:%M:%S') + \
-               ',end_time='+self.end_time.strftime('%Y-%m-%d %H:%M:%S')+',procedure='+self.procedure+']'
+               ',end_time=' + self.end_time.strftime('%Y-%m-%d %H:%M:%S') + ',procedure=' + self.procedure + ']'
 
 
-class Feedback(Base):  # 用户对维修任务的评价
+class Feedback(Base):  # 用户对报修的评价
     __tablename__ = 'feedback'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -124,26 +192,26 @@ class Feedback(Base):  # 用户对维修任务的评价
     def __repr__(self):
         return 'Feedback[id=' + str(self.id) + ',repair_id=' + str(self.repair_id) + \
                ',response_speed=' + str(self.response_speed) + ',service_attitude=' + str(self.service_attitude) + \
-               ',satisfaction_degree='+str(self.satisfaction_degree)+']'
+               ',satisfaction_degree=' + str(self.satisfaction_degree) + ']'
 
 
-class Complaint(Base):  # 用户对维修任务的投诉
+class Complaint(Base):  # 用户对报修的投诉
     __tablename__ = 'complaint'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     repair_id = Column(Integer, ForeignKey("repair.id"))
     content = Column(String(255))
-    status = Column(Integer)  # 0-已发起，1-沟通中，2-已关闭
+    status = Column(Integer, default=1)  # 1-已发起，2-沟通中，3-已关闭
     related_staff = Column(String(255))  # 形如d11,w5,w8的字符串，d表示dispatcher，w表示worker，数字是id
     result = Column(String(255))  # 与客户的沟通结果
 
     def __repr__(self):
         return 'Complaint[id=' + str(self.id) + ',repair_id=' + str(self.repair_id) + \
                ',content=' + self.content + ',status=' + str(self.status) + \
-               ',related_staff='+self.related_staff+',result='+self.result + ']'
+               ',related_staff=' + self.related_staff + ',result=' + self.result + ']'
 
 
-class Statement(Base):  # 投诉相关工作人员提交的情况说明
+class Statement(Base):  # 投诉相关人员提交的情况说明
     __tablename__ = 'statement'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -153,7 +221,7 @@ class Statement(Base):  # 投诉相关工作人员提交的情况说明
 
     def __repr__(self):
         return 'Statement[id=' + str(self.id) + ',complaint_id=' + str(self.complaint_id) + \
-               ',submitter=' + self.submitter + ',content=' + self.content+']'
+               ',submitter=' + self.submitter + ',content=' + self.content + ']'
 
 
 if __name__ == '__main__':
