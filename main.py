@@ -74,7 +74,7 @@ class Dispatcher(Base):  # 调度员
             return False
         if repair.dispatcher_id != self.id:  # 只能调度自己录入的报修
             return False
-        idle_workers = session.query(Worker).filter_by(is_idle=True)  # www找到所有空闲工人
+        idle_workers = session.query(Worker).filter_by(is_idle=True).all()  # 找到所有空闲工人
         for worker in idle_workers:  # 遍历找到能处理该故障类型的工人
             if worker.can_repair(repair.type_id):
                 dispatch = RepairDispatch(repair_id=repair_id, worker_id=worker.id)  # 创建维修调度
@@ -83,11 +83,11 @@ class Dispatcher(Base):  # 调度员
                 worker.is_idle = False  # 工人是否空闲改为否
                 repair.status = 3  # 报修状态修改为3-已调度
                 session.commit()
-                return dispatch.id
-        return False  # 没有合适的空闲工人的情况
+                return worker.id  # 返回分配给的工人id
+        return -1  # 没有合适的空闲工人的情况
 
     def get_self_inputted_repairs(self):  # 调度员查看所有自己录入的、状态为2-已录入待调度的repair
-        repairs = session.query(Repair).filter_by(status=2, dispatcher_id=self.id)
+        repairs = session.query(Repair).filter_by(status=2, dispatcher_id=self.id).all()
         return repairs
 
 
@@ -105,7 +105,7 @@ class Worker(Base):  # 维修工人
 
     def can_repair(self, type_id):
         types = self.repair_types.split(',')
-        return type_id in types
+        return str(type_id) in types
 
 
 class RepairType(Base):  # 故障类型
@@ -202,7 +202,7 @@ class Complaint(Base):  # 用户对报修的投诉
     repair_id = Column(Integer, ForeignKey("repair.id"))
     content = Column(String(255))
     status = Column(Integer, default=1)  # 1-已发起，2-沟通中，3-已关闭
-    related_staff = Column(String(255))  # 形如d11,w5,w8的字符串，d表示dispatcher，w表示worker，数字是id
+    related_staff = Column(String(255))  # 形如d11,w5,w8的字符串，d表示dispatcher，w表示worker，数字是id，可以认为是投诉提交时报修的所有相关人员
     result = Column(String(255))  # 与客户的沟通结果
 
     def __repr__(self):
@@ -232,5 +232,6 @@ if __name__ == '__main__':
     # session.commit()
 
     # 更新数据
-    # repair = session.query(Repair).filter_by(id=1).update({"status": 1})
+    # repair = session.query(Repair).filter_by(id=1).first()
+    # repair.status = 2
     # session.commit()
