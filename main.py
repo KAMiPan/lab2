@@ -11,7 +11,7 @@ session = Session()
 Base = declarative_base()
 
 
-class Manager(Base):
+class Manager(Base):  # 物业经理
     __tablename__ = 'manager'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -21,7 +21,7 @@ class Manager(Base):
         return 'Manager[id='+str(self.id)+',name='+self.name+']'
 
 
-class Owner(Base):
+class Owner(Base):  # 业主
     __tablename__ = 'owner'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -32,7 +32,7 @@ class Owner(Base):
         return 'Owner[id=' + str(self.id) + ',name=' + self.name + ',address='+self.address+']'
 
 
-class Dispatcher(Base):
+class Dispatcher(Base):  # 调度员
     __tablename__ = 'dispatcher'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -42,7 +42,7 @@ class Dispatcher(Base):
         return 'Dispatcher[id='+str(self.id)+',name='+self.name+']'
 
 
-class Worker(Base):
+class Worker(Base):  # 维修工人
     __tablename__ = 'worker'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -55,7 +55,7 @@ class Worker(Base):
                ',is_idle='+str(self.is_idle)+',repair_types'+self.repair_types+']'
 
 
-class RepairType(Base):
+class RepairType(Base):  # 故障类型
     __tablename__ = 'repair_type'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -65,7 +65,7 @@ class RepairType(Base):
         return 'RepairType[id='+str(self.id)+',name='+self.name+']'
 
 
-class Repair(Base):
+class Repair(Base):  # 维修任务，对应多个维修调度
     __tablename__ = 'repair'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -83,7 +83,7 @@ class Repair(Base):
                str(self.owner_id)+',time='+self.time.strftime('%Y-%m-%d %H:%M:%S')+']'
 
 
-class RepairDispatch(Base):
+class RepairDispatch(Base):  # 维修调度，对应多个维修记录
     __tablename__ = 'repair_dispatch'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -96,7 +96,7 @@ class RepairDispatch(Base):
                ',worker_id=' + str(self.worker_id) + ',status' + str(self.status) + ']'
 
 
-class RepairRecord(Base):
+class RepairRecord(Base):  # 维修记录
     __tablename__ = 'repair_record'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -112,7 +112,7 @@ class RepairRecord(Base):
                ',end_time='+self.end_time.strftime('%Y-%m-%d %H:%M:%S')+',procedure='+self.procedure+']'
 
 
-class Feedback(Base):
+class Feedback(Base):  # 用户对维修任务的评价
     __tablename__ = 'feedback'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -127,7 +127,7 @@ class Feedback(Base):
                ',satisfaction_degree='+str(self.satisfaction_degree)+']'
 
 
-class Complaint(Base):
+class Complaint(Base):  # 用户对维修任务的投诉
     __tablename__ = 'complaint'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -143,7 +143,7 @@ class Complaint(Base):
                ',related_staff='+self.related_staff+',result='+self.result + ']'
 
 
-class Statement(Base):
+class Statement(Base):  # 投诉相关工作人员提交的情况说明
     __tablename__ = 'statement'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -163,6 +163,6 @@ if __name__ == '__main__':
     # session.add(repair)
     # session.commit()
 
-    # update数据
+    # 更新数据
     # repair = session.query(Repair).filter_by(id=1).update({"status": 1})
     # session.commit()
