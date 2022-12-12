@@ -1,0 +1,88 @@
+@startuml 整体
+user <|-- owner
+user <|-- dispatcher
+user <|-- worker
+user <|-- manager
+class user {
+    {field} name
+}
+class owner {
+    {field} address
+    {method} submit_repair()
+    {method} submit_complaint()
+    {method} submit_feedback()
+}
+class dispatcher {
+    {method} input_repair()
+    {method} dispatch_repair()
+    {method} list_repairs()
+    {method} list_complaints()
+    {method} submit_statement()
+}
+class worker {
+    {field} is_idle
+    {field} types : require_type[]
+    {method} list_dispatches()
+    {method} record_repair()
+    {method} list_complaints()
+    {method} submit_statement()
+}
+class manager {
+    {method} process_complaint()
+}
+
+enum repair_type {
+    {field} type
+}
+
+owner "1" -- "*" repair : submit
+dispatcher "1" -- "*" repair : dispatch
+class repair {
+    {field} status
+    {field} type : repair_type
+    {field} time
+    {field} content
+    {field} channel
+    {method} get_active_dispatch()
+    {method} get_workhours()
+    {method} get_related_staff()
+}
+
+repair "1" *-- "*" repair_dispatch
+worker "1" -- "*" repair_dispatch : process
+class repair_dispatch {
+    {field} status
+    {method} get_workhours()
+}
+
+repair_dispatch "1" -- "*" repair_record
+class repair_record {
+  {field} type
+  {field} start_time
+  {field} end_time
+  {field} /work_hours
+  {field} procedure
+}
+
+owner "1" -- "*" complaint : submit
+complaint --* repair
+complaint "1" *-- "*" statement
+class complaint {
+  {field} content
+  {field} status
+  {field} /related_staff
+  {field} communication_result
+}
+class statement {
+  {field} content
+  {field} submitter
+}
+
+
+repair "1" *-- "0,1" feedback
+class feedback {
+  {field} response_speed
+  {field} service_attitude
+  {field} satisfaction_degree
+}
+@enduml
